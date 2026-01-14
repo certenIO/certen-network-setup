@@ -1,0 +1,25 @@
+# Binaries
+*.exe
+generate-genesis
+
+# Environment files (contain secrets)
+.env
+.env.local
+
+# Generated output
+genesis-output/
+deploy-package/
+*.tar.gz
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmpclaude-*

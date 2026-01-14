@@ -1,0 +1,281 @@
+# ═══════════════════════════════════════════════════════════════
+# Certen Protocol - Multi-Validator Network Docker Compose
+# 4-Validator BFT Network Configuration
+# ═══════════════════════════════════════════════════════════════
+
+services:
+  # ═══════════════════════════════════════════════════════════════
+  # Shared PostgreSQL Database
+  # ═══════════════════════════════════════════════════════════════
+  postgres:
+    image: postgres:15-alpine
+    container_name: certen-postgres
+    environment:
+      POSTGRES_DB: certen
+      POSTGRES_USER: certen
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-certen_network_pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U certen -d certen"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - certen-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  # ═══════════════════════════════════════════════════════════════
+  # Validator 1 (Seed Node)
+  # ═══════════════════════════════════════════════════════════════
+  validator-1:
+    build:
+      context: ../independant_validator
+      dockerfile: Dockerfile
+    container_name: certen-validator-1
+    hostname: validator-1
+    command: ["./validator"]
+    ports:
+      - "8081:8080"    # HTTP API
+      - "9091:9090"    # Prometheus Metrics
+      - "26661:26656"  # CometBFT P2P
+      - "26671:26657"  # CometBFT RPC
+    environment:
+      VALIDATOR_ID: validator-1
+      NETWORK_NAME: ${NETWORK_NAME:-certen-mainnet}
+      DATABASE_URL: postgres://certen:${POSTGRES_PASSWORD:-certen_network_pass}@postgres:5432/certen?sslmode=disable
+      COMETBFT_ENABLED: "true"
+      COMETBFT_MODE: validator
+      COMETBFT_CHAIN_ID: ${CHAIN_ID:-certen-mainnet}
+      COMETBFT_P2P_LADDR: tcp://0.0.0.0:26656
+      COMETBFT_RPC_LADDR: tcp://0.0.0.0:26657
+      COMETBFT_P2P_PERSISTENT_PEERS: ${PERSISTENT_PEERS:-}
+      ACCUMULATE_URL: ${ACCUMULATE_URL:-https://kermit.accumulatenetwork.io/v2}
+      ETHEREUM_URL: ${ETHEREUM_URL:-https://eth-sepolia.g.alchemy.com/v2/demo}
+      ETH_CHAIN_ID: ${ETH_CHAIN_ID:-11155111}
+      ETH_PRIVATE_KEY: ${ETH_PRIVATE_KEY_1:-0x0000000000000000000000000000000000000000000000000000000000000001}
+      CERTEN_CONTRACT_ADDRESS: ${CERTEN_CONTRACT_ADDRESS:-0xEb17eBd351D2e040a0cB3026a3D04BEc182d8b98}
+      CERTEN_ANCHOR_V3_ADDRESS: ${CERTEN_ANCHOR_V3_ADDRESS:-0xEb17eBd351D2e040a0cB3026a3D04BEc182d8b98}
+      BLS_ZK_VERIFIER_ADDRESS: ${BLS_ZK_VERIFIER_ADDRESS:-0x631B6444216b981561034655349F8a28962DcC5F}
+      ATTESTATION_PEERS: http://validator-2:8080,http://validator-3:8080,http://validator-4:8080
+      ATTESTATION_REQUIRED_COUNT: 3
+      BLS_ZK_TESTING_MODE: "true"
+      LOG_LEVEL: info
+    volumes:
+      - validator1_data:/app/data
+      - validator1_keys:/app/bft-keys
+      - ./genesis-output/validators/validator-1/config:/app/genesis-config:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - certen-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  # ═══════════════════════════════════════════════════════════════
+  # Validator 2
+  # ═══════════════════════════════════════════════════════════════
+  validator-2:
+    build:
+      context: ../independant_validator
+      dockerfile: Dockerfile
+    container_name: certen-validator-2
+    hostname: validator-2
+    command: ["./validator"]
+    ports:
+      - "8082:8080"
+      - "9092:9090"
+      - "26662:26656"
+      - "26672:26657"
+    environment:
+      VALIDATOR_ID: validator-2
+      NETWORK_NAME: ${NETWORK_NAME:-certen-mainnet}
+      DATABASE_URL: postgres://certen:${POSTGRES_PASSWORD:-certen_network_pass}@postgres:5432/certen?sslmode=disable
+      COMETBFT_ENABLED: "true"
+      COMETBFT_MODE: validator
+      COMETBFT_CHAIN_ID: ${CHAIN_ID:-certen-mainnet}
+      COMETBFT_P2P_LADDR: tcp://0.0.0.0:26656
+      COMETBFT_RPC_LADDR: tcp://0.0.0.0:26657
+      COMETBFT_P2P_PERSISTENT_PEERS: ${PERSISTENT_PEERS:-}
+      ACCUMULATE_URL: ${ACCUMULATE_URL:-https://kermit.accumulatenetwork.io/v2}
+      ETHEREUM_URL: ${ETHEREUM_URL:-https://eth-sepolia.g.alchemy.com/v2/demo}
+      ETH_CHAIN_ID: ${ETH_CHAIN_ID:-11155111}
+      ETH_PRIVATE_KEY: ${ETH_PRIVATE_KEY_2:-0x0000000000000000000000000000000000000000000000000000000000000002}
+      CERTEN_CONTRACT_ADDRESS: ${CERTEN_CONTRACT_ADDRESS:-0xEb17eBd351D2e040a0cB3026a3D04BEc182d8b98}
+      CERTEN_ANCHOR_V3_ADDRESS: ${CERTEN_ANCHOR_V3_ADDRESS:-0xEb17eBd351D2e040a0cB3026a3D04BEc182d8b98}
+      BLS_ZK_VERIFIER_ADDRESS: ${BLS_ZK_VERIFIER_ADDRESS:-0x631B6444216b981561034655349F8a28962DcC5F}
+      ATTESTATION_PEERS: http://validator-1:8080,http://validator-3:8080,http://validator-4:8080
+      ATTESTATION_REQUIRED_COUNT: 3
+      BLS_ZK_TESTING_MODE: "true"
+      LOG_LEVEL: info
+    volumes:
+      - validator2_data:/app/data
+      - validator2_keys:/app/bft-keys
+      - ./genesis-output/validators/validator-2/config:/app/genesis-config:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      validator-1:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - certen-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  # ═══════════════════════════════════════════════════════════════
+  # Validator 3
+  # ═══════════════════════════════════════════════════════════════
+  validator-3:
+    build:
+      context: ../independant_validator
+      dockerfile: Dockerfile
+    container_name: certen-validator-3
+    hostname: validator-3
+    command: ["./validator"]
+    ports:
+      - "8083:8080"
+      - "9093:9090"
+      - "26663:26656"
+      - "26673:26657"
+    environment:
+      VALIDATOR_ID: validator-3
+      NETWORK_NAME: ${NETWORK_NAME:-certen-mainnet}
+      DATABASE_URL: postgres://certen:${POSTGRES_PASSWORD:-certen_network_pass}@postgres:5432/certen?sslmode=disable
+      COMETBFT_ENABLED: "true"
+      COMETBFT_MODE: validator
+      COMETBFT_CHAIN_ID: ${CHAIN_ID:-certen-mainnet}
+      COMETBFT_P2P_LADDR: tcp://0.0.0.0:26656
+      COMETBFT_RPC_LADDR: tcp://0.0.0.0:26657
+      COMETBFT_P2P_PERSISTENT_PEERS: ${PERSISTENT_PEERS:-}
+      ACCUMULATE_URL: ${ACCUMULATE_URL:-https://kermit.accumulatenetwork.io/v2}
+      ETHEREUM_URL: ${ETHEREUM_URL:-https://eth-sepolia.g.alchemy.com/v2/demo}
+      ETH_CHAIN_ID: ${ETH_CHAIN_ID:-11155111}
+      ETH_PRIVATE_KEY: ${ETH_PRIVATE_KEY_3:-0x0000000000000000000000000000000000000000000000000000000000000003}
+      CERTEN_CONTRACT_ADDRESS: ${CERTEN_CONTRACT_ADDRESS:-0xEb17eBd351D2e040a0cB3026a3D04BEc182d8b98}
+      CERTEN_ANCHOR_V3_ADDRESS: ${CERTEN_ANCHOR_V3_ADDRESS:-0xEb17eBd351D2e040a0cB3026a3D04BEc182d8b98}
+      BLS_ZK_VERIFIER_ADDRESS: ${BLS_ZK_VERIFIER_ADDRESS:-0x631B6444216b981561034655349F8a28962DcC5F}
+      ATTESTATION_PEERS: http://validator-1:8080,http://validator-2:8080,http://validator-4:8080
+      ATTESTATION_REQUIRED_COUNT: 3
+      BLS_ZK_TESTING_MODE: "true"
+      LOG_LEVEL: info
+    volumes:
+      - validator3_data:/app/data
+      - validator3_keys:/app/bft-keys
+      - ./genesis-output/validators/validator-3/config:/app/genesis-config:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      validator-1:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - certen-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  # ═══════════════════════════════════════════════════════════════
+  # Validator 4
+  # ═══════════════════════════════════════════════════════════════
+  validator-4:
+    build:
+      context: ../independant_validator
+      dockerfile: Dockerfile
+    container_name: certen-validator-4
+    hostname: validator-4
+    command: ["./validator"]
+    ports:
+      - "8084:8080"
+      - "9094:9090"
+      - "26664:26656"
+      - "26674:26657"
+    environment:
+      VALIDATOR_ID: validator-4
+      NETWORK_NAME: ${NETWORK_NAME:-certen-mainnet}
+      DATABASE_URL: postgres://certen:${POSTGRES_PASSWORD:-certen_network_pass}@postgres:5432/certen?sslmode=disable
+      COMETBFT_ENABLED: "true"
+      COMETBFT_MODE: validator
+      COMETBFT_CHAIN_ID: ${CHAIN_ID:-certen-mainnet}
+      COMETBFT_P2P_LADDR: tcp://0.0.0.0:26656
+      COMETBFT_RPC_LADDR: tcp://0.0.0.0:26657
+      COMETBFT_P2P_PERSISTENT_PEERS: ${PERSISTENT_PEERS:-}
+      ACCUMULATE_URL: ${ACCUMULATE_URL:-https://kermit.accumulatenetwork.io/v2}
+      ETHEREUM_URL: ${ETHEREUM_URL:-https://eth-sepolia.g.alchemy.com/v2/demo}
+      ETH_CHAIN_ID: ${ETH_CHAIN_ID:-11155111}
+      ETH_PRIVATE_KEY: ${ETH_PRIVATE_KEY_4:-0x0000000000000000000000000000000000000000000000000000000000000004}
+      CERTEN_CONTRACT_ADDRESS: ${CERTEN_CONTRACT_ADDRESS:-0xEb17eBd351D2e040a0cB3026a3D04BEc182d8b98}
+      CERTEN_ANCHOR_V3_ADDRESS: ${CERTEN_ANCHOR_V3_ADDRESS:-0xEb17eBd351D2e040a0cB3026a3D04BEc182d8b98}
+      BLS_ZK_VERIFIER_ADDRESS: ${BLS_ZK_VERIFIER_ADDRESS:-0x631B6444216b981561034655349F8a28962DcC5F}
+      ATTESTATION_PEERS: http://validator-1:8080,http://validator-2:8080,http://validator-3:8080
+      ATTESTATION_REQUIRED_COUNT: 3
+      BLS_ZK_TESTING_MODE: "true"
+      LOG_LEVEL: info
+    volumes:
+      - validator4_data:/app/data
+      - validator4_keys:/app/bft-keys
+      - ./genesis-output/validators/validator-4/config:/app/genesis-config:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      validator-1:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - certen-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+# ═══════════════════════════════════════════════════════════════
+# Volumes
+# ═══════════════════════════════════════════════════════════════
+volumes:
+  postgres_data:
+    name: certen-network-postgres
+  validator1_data:
+    name: certen-validator-1-data
+  validator1_keys:
+    name: certen-validator-1-keys
+  validator2_data:
+    name: certen-validator-2-data
+  validator2_keys:
+    name: certen-validator-2-keys
+  validator3_data:
+    name: certen-validator-3-data
+  validator3_keys:
+    name: certen-validator-3-keys
+  validator4_data:
+    name: certen-validator-4-data
+  validator4_keys:
+    name: certen-validator-4-keys
+
+# ═══════════════════════════════════════════════════════════════
+# Networks
+# ═══════════════════════════════════════════════════════════════
+networks:
+  certen-network:
+    name: certen-validator-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
